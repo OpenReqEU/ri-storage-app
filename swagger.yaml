@@ -1,0 +1,214 @@
+---
+swagger: "2.0"
+info:
+  description: This API returns a json, containing a list of processed app reviews. It expects a JSON payload that
+    contains an array of at least a single app review. An app review json object must contain a field
+    title (string), body(string), and rating (int).
+  version: "1.0.0"
+  title: Classify  app reviews from the Google Play Store
+  contact:
+    email: stanik@informatik.uni-hamburg.de
+host: 217.172.12.199:9681
+schemes:
+- http
+paths:
+  /hitec/repository/app/observable/google-play:
+    get:
+      description: Get a the apps that are currently under observation
+      operationId: getObsevableGooglePlay
+      produces:
+      - application/json
+      responses:
+        200:
+          description: a list of app reviews
+          schema:
+            $ref: '#/definitions/ObservableGooglePlay'
+        400:
+          description: bad input parameter or no app reviews could be retrieved.
+  /hitec/repository/app/google-play/package-name/{package_name}/class/{class}:
+    get:
+      description: Get a list of app reviews from a given app belonging to the class bug_report or feature_request.
+      operationId: getAppReviewsOfClass
+      produces:
+      - application/json
+      parameters:
+      - name: package_name
+        in: path
+        description: the unique package name of the app.
+        required: true
+        type: string
+      - name: class
+        in: path
+        description: the class app reviews belong to. bug_report or feature_request.
+        required: true
+        type: integer
+      responses:
+        200:
+          description: a list of app reviews
+          schema:
+            $ref: '#/definitions/ProcessedAppReview'
+        400:
+          description: bad input parameter or no app reviews could be retrieved.
+  /hitec/repository/app/store/app-page/google-play/:
+    post:
+      description: Store a google play app page.
+      operationId: postAppPageGooglePlay
+      consumes:
+      - application/json
+      parameters:
+        - in: body
+          name: AppPageGooglePlay
+          required: true
+          schema:
+            $ref: "#/definitions/AppPageGooglePlay"
+      responses:
+        200:
+          description: app page successfully stored.
+        400:
+          description: bad input parameter or no app reviews could be retrieved.
+  /hitec/repository/app/store/app-review/google-play/:
+    post:
+      description: store a list of google play app reviews.
+      operationId: postAppReviewGooglePlay
+      consumes:
+      - application/json
+      parameters:
+        - in: body
+          name: AppPageGooglePlay
+          required: true
+          schema:
+            $ref: "#/definitions/ProcessedAppReview"
+      responses:
+        200:
+          description: app reviews successfully stored.
+        400:
+          description: bad input parameter or no app reviews could be retrieved.
+  /hitec/repository/app/observe/app/google-play/package-name/{package_name}/interval/{interval}:
+    post:
+      description: Store google play app reviews.
+      operationId: postObserveAppGooglePlay
+      parameters:
+      - name: package_name
+        in: path
+        description: the unique package name of the app.
+        required: true
+        type: string
+      - name: interval
+        in: path
+        description: how often an app should be crawled. E.g. daily/weekly/monthly.
+        required: true
+        type: integer
+      responses:
+        200:
+          description: observable app successfully stored.
+        400:
+          description: bad input parameter or no app reviews could be retrieved.
+definitions:
+  AppReview:
+    type: array
+    items:
+      type: object
+      properties:
+        title:
+          type: string
+          example: My Experience so far
+        body:
+          type: string
+          example: I love this application.
+        rating:
+          type: number
+          example: 4
+  ProcessedAppReview:
+    type: array
+    items:
+      type: object
+      properties:
+        title:
+          type: string
+          example: My Experience so far
+        body:
+          type: string
+          example: I love this application.
+        rating:
+          type: integer
+          example: 4
+        cluster_is_bug_report:
+          type: boolean
+          example: true
+        cluster_is_feature_request:
+          type: boolean
+          example: true
+        cluster_is_other:
+          type: boolean
+          example: false
+  ObservableGooglePlay:
+    type: array
+    items:
+      type: object
+      properties:
+        package_name:
+          type: string
+          example: com.whatsapp
+        interval:
+          type: string
+          example: daily
+  AppPageGooglePlay:
+    type: object
+    properties: 
+      name: 
+        type: string
+      package_name: 
+        type: string
+      date_crawled: 
+        type: number
+      category: 
+        type: string
+      usk: 
+        type: string
+      price: 
+        type: string
+      description: 
+        type: string
+      whats_new: 
+        type: array
+        items: 
+          type: string
+      rating: 
+        type: number
+      stars_count: 
+        type: number
+      count_per_rating: 
+        type: object
+        properties: 
+          five: 
+            type: number
+          four: 
+            type: number
+          three: 
+            type: number
+          two: 
+            type: number
+          one: 
+            type: number
+      estimated_download_number: 
+        type: number
+      developer: 
+        type: string
+      top_developer: 
+        type: boolean
+      contains_ads: 
+        type: boolean
+      in_app_purchase: 
+        type: boolean
+      last_update: 
+        type: number
+      os: 
+        type: string
+      requires_os_version: 
+        type: string
+      current_software_version: 
+        type: string
+      similar_apps: 
+        type: array
+        items: 
+          type: string
