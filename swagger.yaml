@@ -1,28 +1,26 @@
 ---
 swagger: "2.0"
 info:
-  description: This API returns a json, containing a list of processed app reviews. It expects a JSON payload that
-    contains an array of at least a single app review. An app review json object must contain a field
-    title (string), body(string), and rating (int).
+  description: The purpose of this microservice is to be the interface to the database for persisting google play store related data.
   version: "1.0.0"
-  title: Classify  app reviews from the Google Play Store
+  title: Store app reviews from the Google Play Store
   contact:
     email: stanik@informatik.uni-hamburg.de
 host: 217.172.12.199:9681
 schemes:
-- http
+  - http
 paths:
   /hitec/repository/app/observable/google-play:
     get:
       description: Get a the apps that are currently under observation
       operationId: getObsevableGooglePlay
       produces:
-      - application/json
+        - application/json
       responses:
         200:
           description: a list of app reviews
           schema:
-            $ref: '#/definitions/ObservableGooglePlay'
+            $ref: "#/definitions/ObservableGooglePlay"
         400:
           description: bad input parameter or no app reviews could be retrieved.
   /hitec/repository/app/google-play/package-name/{package_name}/class/{class}:
@@ -30,23 +28,23 @@ paths:
       description: Get a list of app reviews from a given app belonging to the class bug_report or feature_request.
       operationId: getAppReviewsOfClass
       produces:
-      - application/json
+        - application/json
       parameters:
-      - name: package_name
-        in: path
-        description: the unique package name of the app.
-        required: true
-        type: string
-      - name: class
-        in: path
-        description: the class app reviews belong to. bug_report or feature_request.
-        required: true
-        type: integer
+        - name: package_name
+          in: path
+          description: the unique package name of the app.
+          required: true
+          type: string
+        - name: class
+          in: path
+          description: the class app reviews belong to. bug_report or feature_request.
+          required: true
+          type: integer
       responses:
         200:
           description: a list of app reviews
           schema:
-            $ref: '#/definitions/ProcessedAppReview'
+            $ref: "#/definitions/ProcessedAppReview"
         400:
           description: bad input parameter or no app reviews could be retrieved.
   /hitec/repository/app/store/app-page/google-play/:
@@ -54,7 +52,7 @@ paths:
       description: Store a google play app page.
       operationId: postAppPageGooglePlay
       consumes:
-      - application/json
+        - application/json
       parameters:
         - in: body
           name: AppPageGooglePlay
@@ -71,7 +69,7 @@ paths:
       description: store a list of google play app reviews.
       operationId: postAppReviewGooglePlay
       consumes:
-      - application/json
+        - application/json
       parameters:
         - in: body
           name: AppPageGooglePlay
@@ -83,21 +81,21 @@ paths:
           description: app reviews successfully stored.
         400:
           description: bad input parameter or no app reviews could be retrieved.
-  /hitec/repository/app/observe/app/google-play/package-name/{package_name}/interval/{interval}:
-    post:
+  ? /hitec/repository/app/observe/app/google-play/package-name/{package_name}/interval/{interval}
+  : post:
       description: Store google play app reviews.
       operationId: postObserveAppGooglePlay
       parameters:
-      - name: package_name
-        in: path
-        description: the unique package name of the app.
-        required: true
-        type: string
-      - name: interval
-        in: path
-        description: how often an app should be crawled. E.g. daily/weekly/monthly.
-        required: true
-        type: integer
+        - name: package_name
+          in: path
+          description: the unique package name of the app.
+          required: true
+          type: string
+        - name: interval
+          in: path
+          description: how often an app should be crawled. E.g. daily/weekly/monthly.
+          required: true
+          type: integer
       responses:
         200:
           description: observable app successfully stored.
@@ -154,61 +152,61 @@ definitions:
           example: daily
   AppPageGooglePlay:
     type: object
-    properties: 
-      name: 
+    properties:
+      name:
         type: string
-      package_name: 
+      package_name:
         type: string
-      date_crawled: 
+      date_crawled:
         type: number
-      category: 
+      category:
         type: string
-      usk: 
+      usk:
         type: string
-      price: 
+      price:
         type: string
-      description: 
+      description:
         type: string
-      whats_new: 
+      whats_new:
         type: array
-        items: 
+        items:
           type: string
-      rating: 
+      rating:
         type: number
-      stars_count: 
+      stars_count:
         type: number
-      count_per_rating: 
+      count_per_rating:
         type: object
-        properties: 
-          five: 
+        properties:
+          five:
             type: number
-          four: 
+          four:
             type: number
-          three: 
+          three:
             type: number
-          two: 
+          two:
             type: number
-          one: 
+          one:
             type: number
-      estimated_download_number: 
+      estimated_download_number:
         type: number
-      developer: 
+      developer:
         type: string
-      top_developer: 
+      top_developer:
         type: boolean
-      contains_ads: 
+      contains_ads:
         type: boolean
-      in_app_purchase: 
+      in_app_purchase:
         type: boolean
-      last_update: 
+      last_update:
         type: number
-      os: 
+      os:
         type: string
-      requires_os_version: 
+      requires_os_version:
         type: string
-      current_software_version: 
+      current_software_version:
         type: string
-      similar_apps: 
+      similar_apps:
         type: array
-        items: 
+        items:
           type: string
