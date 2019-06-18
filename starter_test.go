@@ -26,7 +26,7 @@ func TestMain(m *testing.M) {
 	// run the test cases defined in this file
 	retCode := m.Run()
 
-	tearDown()
+	defer tearDown()
 
 	// call with result of m.Run()
 	os.Exit(retCode)
@@ -280,8 +280,8 @@ func TestGetObsevableGooglePlay(t *testing.T) {
 	if err != nil {
 		t.Errorf("Did not receive a proper formed json")
 	}
-	if len(observables) != 1 {
-		t.Errorf("response length differs. Expected %d .\n Got %d instead", 1, len(observables))
+	if len(observables) != 2 {
+		t.Errorf("response length differs. Expected %d .\n Got %d instead", 2, len(observables))
 	}
 }
 
