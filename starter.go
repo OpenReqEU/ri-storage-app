@@ -19,6 +19,14 @@ func main() {
 	mongoClient = MongoGetSession(os.Getenv("MONGO_IP"), os.Getenv("MONGO_USERNAME"), os.Getenv("MONGO_PASSWORD"))
 	MongoCreateCollectionIndexes(mongoClient)
 
+	router := makeRouter()
+
+	fmt.Println("server now starts")
+
+	log.Fatal(http.ListenAndServe(":9681", router))
+}
+
+func makeRouter() *mux.Router {
 	router := mux.NewRouter()
 	// Insert
 	router.HandleFunc("/hitec/repository/app/store/app-page/google-play/", postAppPageGooglePlay).Methods("POST")
@@ -30,9 +38,7 @@ func main() {
 	router.HandleFunc("/hitec/repository/app/observable/google-play", getObsevableGooglePlay).Methods("GET")
 	router.HandleFunc("/hitec/repository/app/google-play/package-name/{package_name}/class/{class}", getAppReviewsOfClass).Methods("GET")
 
-	fmt.Println("server now starts")
-
-	log.Fatal(http.ListenAndServe(":9681", router))
+	return router
 }
 
 func postAppPageGooglePlay(w http.ResponseWriter, r *http.Request) {
