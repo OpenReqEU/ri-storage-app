@@ -273,4 +273,9 @@ func TestGetAppReviewsOfClass(t *testing.T) {
 	var reviews []AppReviewGooglePlay
 	assertJsonDecodes(t, response, &reviews)
 	assert.Len(t, reviews, 1)
+
+	response = ep.withVars("eu.openreq", "bug_report").mustExecuteRequest(nil)
+	assertSuccess(t, response)
+	assertJsonDecodes(t, response, &reviews)
+	assert.Len(t, reviews, 0)
 }
