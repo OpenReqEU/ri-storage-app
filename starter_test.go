@@ -19,6 +19,7 @@ import (
 
 var router *mux.Router
 var mockDBServer dbtest.DBServer
+var reviews []AppReviewGooglePlay
 
 var invalidArrayPayload = []byte(`[{ "wrong_json_format": true }]`)
 var invalidObjectPayload = []byte(`{ "wrong_json_format": true }`)
@@ -56,23 +57,24 @@ func fillDB() {
 	 * Insert fake data
 	 */
 	fmt.Println("Insert fake data")
-	err := mongoClient.DB(database).C(collectionAppReviewsGooglePlay).Insert(
-		AppReviewGooglePlay{
-			ReviewID:       "1234567",
-			PackageName:    "eu.openreq",
-			Author:         "OpenReqUser",
-			Date:           20190131,
-			Rating:         5,
-			Title:          "Tool usage",
-			Body:           "I used the tool for over a year now and like it! I hope for more analytics features coming in the future.",
-			PermaLink:      "www.openreq.eu",
-			FeatureRequest: true,
-			BugReport:      false,
-		},
-	)
+	review := AppReviewGooglePlay{
+		ReviewID:       "1234567",
+		PackageName:    "eu.openreq",
+		Author:         "OpenReqUser",
+		Date:           20190131,
+		Rating:         5,
+		Title:          "Tool usage",
+		Body:           "I used the tool for over a year now and like it! I hope for more analytics features coming in the future.",
+		PermaLink:      "www.openreq.eu",
+		FeatureRequest: true,
+		BugReport:      false,
+	}
+	err := mongoClient.DB(database).C(collectionAppReviewsGooglePlay).Insert(review)
 	if err != nil {
 		panic(err)
 	}
+
+	reviews = []AppReviewGooglePlay{review}
 
 	/*
 	 * Insert fake observables
@@ -221,6 +223,34 @@ func TestPostObserveAppGooglePlay(t *testing.T) {
 
 	// Test for success
 	assertSuccess(t, ep.withVars("test", "h1").mustExecuteRequest(nil))
+}
+
+func TestPostNonExistingAppReviewsGooglePlay(t *testing.T) {
+	ep := endpoint{"POST", "/hitec/repository/app/non-existing/app-review/google-play/"}
+
+	// Test for failure
+	assertFailure(t, ep.mustExecuteRequest(invalidObjectPayload))
+
+	// Test for success
+	existingReview := reviews[0]
+	newReview := AppReviewGooglePlay{
+		ReviewID:       "554466",
+		PackageName:    "eu.openreq",
+		Author:         "John Smith",
+		Date:           20191104,
+		Rating:         4,
+		Title:          "Comment title",
+		Body:           "Body of the comment",
+		PermaLink:      "example.com",
+		FeatureRequest: false,
+		BugReport:      true,
+	}
+	response := ep.mustExecuteRequest([]AppReviewGooglePlay{existingReview, newReview})
+	assertSuccess(t, response)
+	var newReviews []AppReviewGooglePlay
+	assertJsonDecodes(t, response, &newReviews)
+	assert.Len(t, newReviews, 1)
+	assert.Equal(t, newReview, newReviews[0])
 }
 
 func TestGetObsevableGooglePlay(t *testing.T) {
