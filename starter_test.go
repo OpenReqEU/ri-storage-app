@@ -4,7 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
+	"github.com/pkg/errors"
+	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -18,6 +19,10 @@ import (
 
 var router *mux.Router
 var mockDBServer dbtest.DBServer
+var reviews []AppReviewGooglePlay
+
+var invalidArrayPayload = []byte(`[{ "wrong_json_format": true }]`)
+var invalidObjectPayload = []byte(`{ "wrong_json_format": true }`)
 
 func TestMain(m *testing.M) {
 	fmt.Println("--- Start Tests")
@@ -34,22 +39,9 @@ func TestMain(m *testing.M) {
 
 func setup() {
 	fmt.Println("--- --- setup")
-	setupRouter()
+	router = makeRouter()
 	setupDB()
 	fillDB()
-}
-
-func setupRouter() {
-	router = mux.NewRouter()
-	// Insert
-	router.HandleFunc("/hitec/repository/app/store/app-page/google-play/", postAppPageGooglePlay).Methods("POST")
-	router.HandleFunc("/hitec/repository/app/store/app-review/google-play/", postAppReviewGooglePlay).Methods("POST")
-	router.HandleFunc("/hitec/repository/app/observe/app/google-play/package-name/{package_name}/interval/{interval}", postObserveAppGooglePlay).Methods("POST")
-	router.HandleFunc("/hitec/repository/app/non-existing/app-review/google-play/", postNonExistingAppReviewsGooglePlay).Methods("POST")
-
-	// Get
-	router.HandleFunc("/hitec/repository/app/observable/google-play", getObsevableGooglePlay).Methods("GET")
-	router.HandleFunc("/hitec/repository/app/google-play/package-name/{package_name}/class/{class}", getAppReviewsOfClass).Methods("GET")
 }
 
 func setupDB() {
@@ -65,23 +57,24 @@ func fillDB() {
 	 * Insert fake data
 	 */
 	fmt.Println("Insert fake data")
-	err := mongoClient.DB(database).C(collectionAppReviewsGooglePlay).Insert(
-		AppReviewGooglePlay{
-			ReviewID:       "1234567",
-			PackageName:    "eu.openreq",
-			Author:         "OpenReqUser",
-			Date:           20190131,
-			Rating:         5,
-			Title:          "Tool usage",
-			Body:           "I used the tool for over a year now and like it! I hope for more analytics features coming in the future.",
-			PermaLink:      "www.openreq.eu",
-			FeatureRequest: true,
-			BugReport:      false,
-		},
-	)
+	review := AppReviewGooglePlay{
+		ReviewID:       "1234567",
+		PackageName:    "eu.openreq",
+		Author:         "OpenReqUser",
+		Date:           20190131,
+		Rating:         5,
+		Title:          "Tool usage",
+		Body:           "I used the tool for over a year now and like it! I hope for more analytics features coming in the future.",
+		PermaLink:      "www.openreq.eu",
+		FeatureRequest: true,
+		BugReport:      false,
+	}
+	err := mongoClient.DB(database).C(collectionAppReviewsGooglePlay).Insert(review)
 	if err != nil {
 		panic(err)
 	}
+
+	reviews = []AppReviewGooglePlay{review}
 
 	/*
 	 * Insert fake observables
@@ -102,212 +95,187 @@ func tearDown() {
 	mockDBServer.Stop() // Stop shuts down the temporary server and removes data on disk.
 }
 
-func buildRequest(method, endpoint string, payload io.Reader, t *testing.T) *http.Request {
-	req, err := http.NewRequest(method, endpoint, payload)
-	if err != nil {
-		t.Errorf("An error occurred. %v", err)
-	}
-
-	return req
+type endpoint struct {
+	method string
+	url    string
 }
 
-func executeRequest(req *http.Request) *httptest.ResponseRecorder {
+func (e endpoint) withVars(vs ...interface{}) endpoint {
+	e.url = fmt.Sprintf(e.url, vs...)
+	return e
+}
+
+func (e endpoint) executeRequest(payload interface{}) (error, *httptest.ResponseRecorder) {
+	body := new(bytes.Buffer)
+	err := json.NewEncoder(body).Encode(payload)
+	if err != nil {
+		return err, nil
+	}
+
+	req, err := http.NewRequest(e.method, e.url, body)
+	if err != nil {
+		return err, nil
+	}
+
 	rr := httptest.NewRecorder()
 	router.ServeHTTP(rr, req)
+
+	return nil, rr
+}
+
+func (e endpoint) mustExecuteRequest(payload interface{}) *httptest.ResponseRecorder {
+	err, rr := e.executeRequest(payload)
+	if err != nil {
+		panic(errors.Wrap(err, `Could not execute request`))
+	}
 
 	return rr
 }
 
+func isSuccess(code int) bool {
+	return code >= 200 && code < 300
+}
+
+func assertSuccess(t *testing.T, rr *httptest.ResponseRecorder) {
+	if !isSuccess(rr.Code) {
+		t.Errorf("Status code differs. Expected success.\n Got status %d (%s) instead", rr.Code, http.StatusText(rr.Code))
+	}
+}
+func assertFailure(t *testing.T, rr *httptest.ResponseRecorder) {
+	if isSuccess(rr.Code) {
+		t.Errorf("Status code differs. Expected failure.\n Got status %d (%s) instead", rr.Code, http.StatusText(rr.Code))
+	}
+}
+
+func assertJsonDecodes(t *testing.T, rr *httptest.ResponseRecorder, v interface{}) {
+	err := json.Unmarshal(rr.Body.Bytes(), v)
+	if err != nil {
+		t.Error(errors.Wrap(err, "Expected valid json array"))
+	}
+}
+
 func TestPostAppPageGooglePlay(t *testing.T) {
-	fmt.Println("start TestPostAppPageGooglePlay")
-	var method = "POST"
-	var endpoint = "/hitec/repository/app/store/app-page/google-play/"
+	ep := endpoint{"POST", "/hitec/repository/app/store/app-page/google-play/"}
 
-	/*
-	 * test for faillure
-	 */
-	payload := new(bytes.Buffer)
-	err := json.NewEncoder(payload).Encode([]byte(`[{ "wrong_json_format": true }]`))
-	if err != nil {
-		t.Errorf("Could not convert example tweet to json byte")
-	}
+	// Test for failure
+	assertFailure(t, ep.mustExecuteRequest(invalidObjectPayload))
 
-	req := buildRequest(method, endpoint, payload, t)
-	rr := executeRequest(req)
-
-	//Confirm the response has the right status code
-	if status := rr.Code; status != http.StatusBadRequest {
-		t.Errorf("Status code differs. Expected %d .\n Got %d instead", http.StatusBadRequest, status)
-	}
-
-	/*
-	 * test for success
-	 */
-	payload = new(bytes.Buffer)
-	err = json.NewEncoder(payload).Encode(
-		AppPageGooglePlay{
-			Name:          "OpenReq",
-			PackageName:   "eu.openreq",
-			DateCrawled:   20190131,
-			Category:      "Tools",
-			USK:           "all ages",
-			Price:         "free",
-			PriceValue:    0.0,
-			PriceCurrency: "EUR",
-			Description:   "contains, among others, analytics features.",
-			WhatsNew:      []string{"re-designed dashboard"},
-			Rating:        5,
-			StarsCount:    10000,
-			CountPerRating: StarCountPerRating{
-				Five:  10000,
-				Four:  0,
-				Three: 0,
-				Two:   0,
-				One:   0,
-			},
-			EstimatedDownloadNumber: 10000,
-			DeveloperName:           "OpenReq Consortium",
-			TopDeveloper:            true,
-			ContainsAds:             false,
-			InAppPurchases:          false,
-			LastUpdate:              20190131,
-			Os:                      "ANDROID",
-			RequiresOsVersion:       "9.0",
-			CurrentSoftwareVersion:  "beta",
-			SimilarApps:             []string{"supersede"},
+	// Test for success
+	appPage := AppPageGooglePlay{
+		Name:          "OpenReq",
+		PackageName:   "eu.openreq",
+		DateCrawled:   20190131,
+		Category:      "Tools",
+		USK:           "all ages",
+		Price:         "free",
+		PriceValue:    0.0,
+		PriceCurrency: "EUR",
+		Description:   "contains, among others, analytics features.",
+		WhatsNew:      []string{"re-designed dashboard"},
+		Rating:        5,
+		StarsCount:    10000,
+		CountPerRating: StarCountPerRating{
+			Five:  10000,
+			Four:  0,
+			Three: 0,
+			Two:   0,
+			One:   0,
 		},
-	)
-	if err != nil {
-		t.Errorf("Could not convert example tweet to json byte")
+		EstimatedDownloadNumber: 10000,
+		DeveloperName:           "OpenReq Consortium",
+		TopDeveloper:            true,
+		ContainsAds:             false,
+		InAppPurchases:          false,
+		LastUpdate:              20190131,
+		Os:                      "ANDROID",
+		RequiresOsVersion:       "9.0",
+		CurrentSoftwareVersion:  "beta",
+		SimilarApps:             []string{"supersede"},
 	}
-	req = buildRequest(method, endpoint, payload, t)
-	rr = executeRequest(req)
 
-	//Confirm the response has the right status code
-	if status := rr.Code; status != http.StatusOK {
-		t.Errorf("Status code differs. Expected %d .\n Got %d instead", http.StatusOK, status)
-	}
+	assertSuccess(t, ep.mustExecuteRequest(appPage))
 }
 
 func TestPostAppReviewGooglePlay(t *testing.T) {
-	fmt.Println("start TestPostAppReviewGooglePlay")
-	var method = "POST"
-	var endpoint = "/hitec/repository/app/store/app-review/google-play/"
+	ep := endpoint{"POST", "/hitec/repository/app/store/app-review/google-play/"}
 
-	/*
-	 * test for faillure
-	 */
-	payload := new(bytes.Buffer)
-	err := json.NewEncoder(payload).Encode([]byte(`[{ "wrong_json_format": true }]`))
-	if err != nil {
-		t.Errorf("Could not convert example tweet to json byte")
-	}
+	// Test for failure
+	assertFailure(t, ep.mustExecuteRequest(invalidObjectPayload))
 
-	req := buildRequest(method, endpoint, payload, t)
-	rr := executeRequest(req)
-
-	//Confirm the response has the right status code
-	if status := rr.Code; status != http.StatusBadRequest {
-		t.Errorf("Status code differs. Expected %d .\n Got %d instead", http.StatusBadRequest, status)
-	}
-
-	/*
-	 * test for success
-	 */
-	payload = new(bytes.Buffer)
-	err = json.NewEncoder(payload).Encode(
-		[]AppReviewGooglePlay{AppReviewGooglePlay{
-			ReviewID:       "1234567",
-			PackageName:    "eu.openreq",
-			Author:         "OpenReqUser",
-			Date:           20190131,
-			Rating:         5,
-			Title:          "Tool usage",
-			Body:           "I used the tool for over a year now and like it! I hope for more analytics features coming in the future.",
-			PermaLink:      "www.openreq.eu",
-			FeatureRequest: true,
-			BugReport:      false,
-		}},
-	)
-	if err != nil {
-		t.Errorf("Could not convert example tweet to json byte")
-	}
-	req = buildRequest(method, endpoint, payload, t)
-	rr = executeRequest(req)
-
-	//Confirm the response has the right status code
-	if status := rr.Code; status != http.StatusOK {
-		t.Errorf("Status code differs. Expected %d .\n Got %d instead", http.StatusOK, status)
-	}
+	// Test for success
+	reviews := []AppReviewGooglePlay{{
+		ReviewID:       "1234567",
+		PackageName:    "eu.openreq",
+		Author:         "OpenReqUser",
+		Date:           20190131,
+		Rating:         5,
+		Title:          "Tool usage",
+		Body:           "I used the tool for over a year now and like it! I hope for more analytics features coming in the future.",
+		PermaLink:      "www.openreq.eu",
+		FeatureRequest: true,
+		BugReport:      false,
+	}}
+	assertSuccess(t, ep.mustExecuteRequest(reviews))
 }
 
 func TestPostObserveAppGooglePlay(t *testing.T) {
-	fmt.Println("start TestPostObserveAppGooglePlay")
-	var method = "POST"
-	var endpoint = "/hitec/repository/app/observe/app/google-play/package-name/%s/interval/%s"
+	ep := endpoint{"POST", "/hitec/repository/app/observe/app/google-play/package-name/%s/interval/%s"}
 
-	/*
-	 * test for success
-	 */
-	endpoint = fmt.Sprintf(endpoint, "test", "1h")
-	req := buildRequest(method, endpoint, nil, t)
-	rr := executeRequest(req)
+	// Test for success
+	assertSuccess(t, ep.withVars("test", "h1").mustExecuteRequest(nil))
+}
 
-	//Confirm the response has the right status code
-	if status := rr.Code; status != http.StatusOK {
-		t.Errorf("Status code differs. Expected %d .\n Got %d instead", http.StatusOK, status)
+func TestPostNonExistingAppReviewsGooglePlay(t *testing.T) {
+	ep := endpoint{"POST", "/hitec/repository/app/non-existing/app-review/google-play/"}
+
+	// Test for failure
+	assertFailure(t, ep.mustExecuteRequest(invalidObjectPayload))
+
+	// Test for success
+	existingReview := reviews[0]
+	newReview := AppReviewGooglePlay{
+		ReviewID:       "554466",
+		PackageName:    "eu.openreq",
+		Author:         "John Smith",
+		Date:           20191104,
+		Rating:         4,
+		Title:          "Comment title",
+		Body:           "Body of the comment",
+		PermaLink:      "example.com",
+		FeatureRequest: false,
+		BugReport:      true,
 	}
+	response := ep.mustExecuteRequest([]AppReviewGooglePlay{existingReview, newReview})
+	assertSuccess(t, response)
+	var newReviews []AppReviewGooglePlay
+	assertJsonDecodes(t, response, &newReviews)
+	assert.Len(t, newReviews, 1)
+	assert.Equal(t, newReview, newReviews[0])
 }
 
 func TestGetObsevableGooglePlay(t *testing.T) {
-	fmt.Println("start TestGetObsevableGooglePlay")
-	var method = "GET"
-	var endpoint = "/hitec/repository/app/observable/google-play"
+	ep := endpoint{"GET", "/hitec/repository/app/observable/google-play"}
 
-	/*
-	 * test for success
-	 */
-	req := buildRequest(method, endpoint, nil, t)
-	rr := executeRequest(req)
-
-	//Confirm the response has the right status code
-	if status := rr.Code; status != http.StatusOK {
-		t.Errorf("Status code differs. Expected %d .\n Got %d instead", http.StatusOK, status)
-	}
-
+	// Test for success
+	response := ep.mustExecuteRequest(nil)
+	assertSuccess(t, response)
 	var observables []ObservableGooglePlay
-	err := json.NewDecoder(rr.Body).Decode(&observables)
-	if err != nil {
-		t.Errorf("Did not receive a proper formed json")
-	}
-	if len(observables) != 2 {
-		t.Errorf("response length differs. Expected %d .\n Got %d instead", 2, len(observables))
-	}
+	assertJsonDecodes(t, response, &observables)
+	assert.Len(t, observables, 2)
 }
 
 func TestGetAppReviewsOfClass(t *testing.T) {
-	fmt.Println("start TestGetAppReviewsOfClass")
-	var method = "GET"
-	var endpoint = "/hitec/repository/app/google-play/package-name/%s/class/%s"
+	ep := endpoint{"GET", "/hitec/repository/app/google-play/package-name/%s/class/%s"}
 
-	/*
-	 * test for success CHECK 1
-	 */
-	endpointCheckOne := fmt.Sprintf(endpoint, "eu.openreq", "feature_request")
-	req := buildRequest(method, endpointCheckOne, nil, t)
-	rr := executeRequest(req)
+	// Test for success
+	response := ep.withVars("eu.openreq", "feature_request").mustExecuteRequest(nil)
+	assertSuccess(t, response)
+	var reviews []AppReviewGooglePlay
+	assertJsonDecodes(t, response, &reviews)
+	assert.Len(t, reviews, 1)
 
-	//Confirm the response has the right status code
-	if status := rr.Code; status != http.StatusOK {
-		t.Errorf("Status code differs. Expected %d .\n Got %d instead", http.StatusOK, status)
-	}
-
-	var appReviews []AppReviewGooglePlay
-	err := json.NewDecoder(rr.Body).Decode(&appReviews)
-	if err != nil {
-		t.Errorf("Did not receive a proper formed json")
-	}
-	if len(appReviews) != 1 {
-		t.Errorf("response length differs. Expected %d .\n Got %d instead", 1, len(appReviews))
-	}
+	response = ep.withVars("eu.openreq", "bug_report").mustExecuteRequest(nil)
+	assertSuccess(t, response)
+	assertJsonDecodes(t, response, &reviews)
+	assert.Len(t, reviews, 0)
 }

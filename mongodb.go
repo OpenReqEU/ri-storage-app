@@ -3,11 +3,8 @@ package main
 import (
 	"fmt"
 	"log"
-	"strconv"
-
 	"time"
 
-	"github.com/jehiah/go-strftime"
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -104,22 +101,6 @@ func MongoInsertAppPageGooglePlay(mongoClient *mgo.Session, appPage AppPageGoogl
 	return true
 }
 
-// MongoGetAppPageGooglePlayByPackagename returns the app page of the given package name. Returns empty struct if it does not exist
-func MongoGetAppPageGooglePlayByPackagename(mongoClient *mgo.Session, packageName string) AppPageGooglePlay {
-	var appPage AppPageGooglePlay
-	err := mongoClient.
-		DB(database).
-		C(collectionAppPageGooglePlay).
-		Find(bson.M{"package_name": packageName}).
-		One(&appPage)
-	if err != nil {
-		fmt.Println("ERR", err)
-		panic(err)
-	}
-
-	return appPage
-}
-
 // MongoInsertAppReviewGooglePlay returns ok if the review was inserted or updated
 func MongoInsertAppReviewGooglePlay(mongoClient *mgo.Session, review AppReviewGooglePlay) bool {
 	col := mongoClient.DB(database).C(collectionAppReviewsGooglePlay)
@@ -155,23 +136,6 @@ func MongoGetNonExistingAppReviewGooglePlay(mongoClient *mgo.Session, reviews []
 	return uniqueAppReviews
 }
 
-//MongoGetAppReviewsGooglePlayByPackagename returns the reviews of the given package name. Returns empty struct if none exist
-func MongoGetAppReviewsGooglePlayByPackagename(mongoClient *mgo.Session, packageName string, amount int) []AppReviewGooglePlay {
-	var reviews []AppReviewGooglePlay
-	err := mongoClient.
-		DB(database).
-		C(collectionAppReviewsGooglePlay).
-		Find(bson.M{"package_name": packageName}).
-		Limit(amount).
-		All(&reviews)
-	if err != nil {
-		fmt.Println("ERR", err)
-		panic(err)
-	}
-
-	return reviews
-}
-
 // MongoInsertObservableGooglePlay returns ok if the package name was inserted or already existed
 func MongoInsertObservableGooglePlay(mongoClient *mgo.Session, observable ObservableGooglePlay) bool {
 	err := mongoClient.DB(database).C(collectionObservableGooglePlay).Insert(observable)
@@ -199,28 +163,6 @@ func MongoGetAllObservableGooglePlay(mongoClient *mgo.Session) []ObservableGoogl
 	return observables
 }
 
-// MongoGetCollectionStats returns the number of db entries of a specific domain
-func MongoGetCollectionStats(mongoClient *mgo.Session) int {
-	var n int
-
-	n, _ = mongoClient.DB(database).C(collectionAppReviewsGooglePlay).Find(nil).Count()
-
-	return n
-}
-
-func getCurrentDate() int64 {
-	unformattedCurrentDate := time.Now()
-	s := strftime.Format("%Y%m%d", unformattedCurrentDate)
-	val, err := strconv.Atoi(s)
-	if err != nil {
-		fmt.Println("ERR", err)
-		panic(err)
-	}
-	currentDate := int64(val)
-
-	return currentDate
-}
-
 // MongoGeGooglePlayReviewOfClass returns all reviews belonging to the given package name and class
 func MongoGetGooglePlayReviewOfClass(mongoClient *mgo.Session, packageName string, reviewClass string) []AppReviewGooglePlay {
 	var reviewCLassField string
@@ -234,22 +176,6 @@ func MongoGetGooglePlayReviewOfClass(mongoClient *mgo.Session, packageName strin
 		DB(database).
 		C(collectionAppReviewsGooglePlay).
 		Find(bson.M{"package_name": packageName, reviewCLassField: true}).
-		All(&reviews)
-	if err != nil {
-		fmt.Println("ERR", err)
-		panic(err)
-	}
-
-	return reviews
-}
-
-// MongoGetFeatureRequestsGooglePlay returns all feature requests belonging to the given package name
-func MongoGetFeatureRequestsGooglePlay(mongoClient *mgo.Session, packageName string) []AppReviewGooglePlay {
-	var reviews []AppReviewGooglePlay
-	err := mongoClient.
-		DB(database).
-		C(collectionAppReviewsGooglePlay).
-		Find(bson.M{"package_name": packageName, "cluster_is_feature_request": true}).
 		All(&reviews)
 	if err != nil {
 		fmt.Println("ERR", err)
